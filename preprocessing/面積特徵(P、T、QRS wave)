@@ -1,0 +1,125 @@
+import numpy as np
+from scipy.integrate import trapz
+
+# -------------------- T Wave Area -------------------- #
+def calculate_t_wave_area(ecg_signal, t_wave_starts, t_wave_ends):
+    return [abs(trapz(ecg_signal[start:end])) for start, end in zip(t_wave_starts, t_wave_ends)]
+
+def calculate_all_leads_t_wave_area(X_cleaned, sampling_rate):
+    num_patients, _, num_leads = X_cleaned.shape
+    all_t_wave_areas = np.empty((num_patients, num_leads), dtype=object)
+
+    for patient_idx in range(num_patients):
+        for lead_idx in range(num_leads):
+            if np.all(r_peaks_all_patients[patient_idx, lead_idx] == 'INCOMPLETE'):
+                continue
+
+            ecg_signal = X_cleaned[patient_idx, :, lead_idx]
+            r_peaks = r_peaks_all_patients[patient_idx, lead_idx]
+            interval = int(0.070 * sampling_rate)
+            qrs_regions = [(r - interval, r + interval) for r in r_peaks]
+
+            q_peaks = find_q_peaks_within_region(ecg_signal, r_peaks, qrs_regions, sampling_rate)
+            s_peaks = find_s_peaks_within_region(ecg_signal, r_peaks, qrs_regions, sampling_rate)
+            qrs_onsets = find_qrs_onset(ecg_signal, q_peaks, sampling_rate)
+            qrs_offsets = find_qrs_offset(ecg_signal, s_peaks, sampling_rate)
+
+            t_peaks, isoelectric_vals = detect_t_peaks(ecg_signal, qrs_offsets, sampling_rate)
+            t_starts, t_ends = detect_t_wave_boundaries(ecg_signal, t_peaks, isoelectric_vals, qrs_offsets)
+
+            all_t_wave_areas[patient_idx, lead_idx] = calculate_t_wave_area(ecg_signal, t_starts, t_ends)
+
+    return all_t_wave_areas
+
+def calculate_average_t_wave_areas(all_t_wave_areas):
+    num_patients, num_leads = all_t_wave_areas.shape
+    avg_t_wave_areas = np.full((num_patients, num_leads), np.nan)
+
+    for i in range(num_patients):
+        for j in range(num_leads):
+            values = all_t_wave_areas[i, j]
+            if values is not None and len(values) > 0:
+                avg_t_wave_areas[i, j] = np.mean(values)
+
+    return avg_t_wave_areas
+
+# -------------------- P Wave Area -------------------- #
+def calculate_p_wave_area(ecg_signal, p_wave_starts, p_wave_ends):
+    return [abs(trapz(ecg_signal[start:end])) for start, end in zip(p_wave_starts, p_wave_ends)]
+
+def calculate_all_leads_p_wave_area(X_cleaned, r_peaks_all_patients, sampling_rate=500):
+    num_patients, _, num_leads = X_cleaned.shape
+    p_wave_area_all = np.empty((num_patients, num_leads), dtype=object)
+
+    for patient_idx in range(num_patients):
+        for lead_idx in range(num_leads):
+            if np.all(r_peaks_all_patients[patient_idx, lead_idx] == 'INCOMPLETE'):
+                continue
+
+            ecg_signal = X_cleaned[patient_idx, :, lead_idx]
+            r_peaks = r_peaks_all_patients[patient_idx, lead_idx]
+            interval = int(0.070 * sampling_rate)
+            qrs_regions = [(r - interval, r + interval) for r in r_peaks]
+
+            q_peaks = find_q_peaks_within_region(ecg_signal, r_peaks, qrs_regions, sampling_rate)
+            s_peaks = find_s_peaks_within_region(ecg_signal, r_peaks, qrs_regions, sampling_rate)
+            qrs_onsets = find_qrs_onset(ecg_signal, q_peaks, sampling_rate)
+            qrs_offsets = find_qrs_offset(ecg_signal, s_peaks, sampling_rate)
+
+            p_peaks, isoelectric_vals = detect_p_peaks_and_isoelectric_line(ecg_signal, qrs_onsets)
+            p_starts, p_ends = detect_p_wave_boundaries(ecg_signal, p_peaks, isoelectric_vals, qrs_onsets)
+
+            p_wave_area_all[patient_idx, lead_idx] = calculate_p_wave_area(ecg_signal, p_starts, p_ends)
+
+    return p_wave_area_all
+
+def calculate_average_p_wave_areas(all_p_wave_areas):
+    num_patients, num_leads = all_p_wave_areas.shape
+    avg_p_wave_areas = np.full((num_patients, num_leads), np.nan)
+
+    for i in range(num_patients):
+        for j in range(num_leads):
+            values = all_p_wave_areas[i, j]
+            if values is not None and len(values) > 0:
+                avg_p_wave_areas[i, j] = np.mean(values)
+
+    return avg_p_wave_areas
+
+# -------------------- QRS Wave Area -------------------- #
+def calculate_qrs_areas(ecg_signal, qrs_onsets, qrs_offsets):
+    return [abs(trapz(ecg_signal[start:end])) for start, end in zip(qrs_onsets, qrs_offsets)]
+
+def compute_qrs_wave_area_for_all_patients(X_cleaned, r_peaks_all_patients, sampling_rate=500):
+    num_patients, _, num_leads = X_cleaned.shape
+    qrs_area_all = np.empty((num_patients, num_leads), dtype=object)
+
+    for patient_idx in range(num_patients):
+        for lead_idx in range(num_leads):
+            if np.all(r_peaks_all_patients[patient_idx, lead_idx] == 'INCOMPLETE'):
+                continue
+
+            ecg_signal = X_cleaned[patient_idx, :, lead_idx]
+            r_peaks = r_peaks_all_patients[patient_idx, lead_idx]
+            interval = int(0.070 * sampling_rate)
+            qrs_regions = [(r - interval, r + interval) for r in r_peaks]
+
+            q_peaks = find_q_peaks_within_region(ecg_signal, r_peaks, qrs_regions, sampling_rate)
+            s_peaks = find_s_peaks_within_region(ecg_signal, r_peaks, qrs_regions, sampling_rate)
+            qrs_onsets = find_qrs_onset(ecg_signal, q_peaks, sampling_rate)
+            qrs_offsets = find_qrs_offset(ecg_signal, s_peaks, sampling_rate)
+
+            qrs_area_all[patient_idx, lead_idx] = calculate_qrs_areas(ecg_signal, qrs_onsets, qrs_offsets)
+
+    return qrs_area_all
+
+def calculate_average_qrs_wave_areas(all_qrs_areas):
+    num_patients, num_leads = all_qrs_areas.shape
+    avg_qrs_areas = np.full((num_patients, num_leads), np.nan)
+
+    for i in range(num_patients):
+        for j in range(num_leads):
+            values = all_qrs_areas[i, j]
+            if values is not None and len(values) > 0:
+                avg_qrs_areas[i, j] = np.mean(values)
+
+    return avg_qrs_areas
