@@ -1,135 +1,128 @@
-# machine_learning/random_forest_comparison.py
+# Random Forest 模型實驗
+# 資料分為三種處理方式：
+# (1) 原始資料（未採樣）
+# (2) 採樣資料（如欠抽樣、過抽樣後的 X_train_res）
+# (3) 1:1 配平資料（X_train_bal）
 
-"""
-本檔案包含三種版本的 Random Forest 模型訓練與評估：
-1. 無採樣版本（原始資料）
-2. 有採樣版本（如 SMOTE 平衡後資料）
-3. 1:1 切資料版本（手動平衡資料集）
-
-每種版本皆針對不同評估指標（F1、Accuracy、Recall、AUC）進行調參與分析。
-"""
-
-import numpy as np
-import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score, 
+                             roc_auc_score, classification_report, confusion_matrix)
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import (
-    accuracy_score, precision_score, recall_score,
-    f1_score, roc_auc_score, classification_report,
-    roc_curve, confusion_matrix, auc
-)
+import numpy as np
+import pandas as pd
 
-#======================= Part 1: 無採樣版本 ==========================
-# ✅ 用原始資料，針對 F1 與 AUC 各自調參
+#================= 1. 採樣後資料（X_train_res） ===================
 param_grid = {
-    'n_estimators': [100, 200, 300, 400],
-    'max_depth': [2, 4, 6, 8],
-    'min_samples_split': [2, 5],
-    'min_samples_leaf': [1, 2],
-    'bootstrap': [True]
+    'n_estimators': [100, 200, 300,400],  # 減少樹的數量範圍
+    'max_depth': [2,4, 6, 8],  # 限制最大深度，避免過於複雜的模型
+    'min_samples_split': [2, 5],  # 增加分裂所需的最小樣本數
+    'min_samples_leaf': [1, 2],  # 增加葉節點的最小樣本數
+    'bootstrap': [True],  # 使用bootstrap樣本來增加訓練的隨機性
 }
 
-best_f1, best_auc = 0, 0
-best_f1_params, best_auc_params = {}, {}
+best_auc_res = 0
+best_params_res = {}
 
 for n in param_grid['n_estimators']:
     for d in param_grid['max_depth']:
-        for split in param_grid['min_samples_split']:
-            for leaf in param_grid['min_samples_leaf']:
-                model = RandomForestClassifier(
-                    n_estimators=n, max_depth=d,
-                    min_samples_split=split, min_samples_leaf=leaf,
-                    bootstrap=True, random_state=42
-                )
-                model.fit(X_train, y_train)
-
-                # F1 調參
-                f1 = f1_score(y_val, model.predict(X_val))
-                if f1 > best_f1:
-                    best_f1 = f1
-                    best_f1_params = model.get_params()
-
-                # AUC 調參
+        for s in param_grid['min_samples_split']:
+            for l in param_grid['min_samples_leaf']:
+                model = RandomForestClassifier(n_estimators=n, max_depth=d, min_samples_split=s,
+                                               min_samples_leaf=l, bootstrap=True, random_state=42)
+                model.fit(X_train_res, y_train_res)
                 prob = model.predict_proba(X_val)[:, 1]
-                auc_val = roc_auc_score(y_val, prob)
-                if auc_val > best_auc:
-                    best_auc = auc_val
-                    best_auc_params = model.get_params()
+                auc = roc_auc_score(y_val, prob)
+                if auc > best_auc_res:
+                    best_auc_res = auc
+                    best_params_res = model.get_params()
 
-print("[無採樣] Best F1:", best_f1)
-print("F1 Params:", best_f1_params)
-print("Best AUC:", best_auc)
-print("AUC Params:", best_auc_params)
+print("[採樣] Best ROC AUC:", best_auc_res)
+print("[採樣] Best Params:", best_params_res)
 
-#======================= Part 2: 有採樣版本 ==========================
-# ✅ 使用 SMOTE 後資料進行訓練，分別針對四個指標訓練四個模型
-rf_f1 = RandomForestClassifier(n_estimators=100, max_depth=8, min_samples_split=2, min_samples_leaf=2, bootstrap=True, random_state=42)
-rf_acc = RandomForestClassifier(n_estimators=100, max_depth=8, min_samples_split=5, min_samples_leaf=1, bootstrap=True, random_state=42)
-rf_rec = RandomForestClassifier(n_estimators=100, max_depth=8, min_samples_split=2, min_samples_leaf=2, bootstrap=True, random_state=42)
-rf_auc = RandomForestClassifier(n_estimators=100, max_depth=8, min_samples_split=2, min_samples_leaf=2, bootstrap=True, random_state=42)
+model_res = RandomForestClassifier(**best_params_res)
+model_res.fit(X_train_res, y_train_res)
+y_pred_res = model_res.predict(X_test)
+y_prob_res = model_res.predict_proba(X_test)[:, 1]
 
-models_resampled = [rf_f1, rf_acc, rf_rec, rf_auc]
+print("[採樣] Accuracy:", accuracy_score(y_test, y_pred_res))
+print("[採樣] Precision:", precision_score(y_test, y_pred_res))
+print("[採樣] Recall:", recall_score(y_test, y_pred_res))
+print("[採樣] F1-score:", f1_score(y_test, y_pred_res))
+print("[採樣] ROC AUC:", roc_auc_score(y_test, y_prob_res))
 
-for i, model in enumerate(models_resampled, 1):
-    model.fit(X_train_res, y_train_res)
-    y_pred = model.predict(X_test)
-    print(f"[有採樣] Model {i}:")
-    print(classification_report(y_test, y_pred))
-    auc_val = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
-    print("AUC:", auc_val)
-
-# 混淆矩陣與特徵重要性（以 rf_acc 模型為例）
-cm = confusion_matrix(y_test, rf_acc.predict(X_test))
-plt.figure(figsize=(6,5))
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-plt.title('Confusion Matrix (Resampled)')
-plt.xlabel('Predicted')
-plt.ylabel('Actual')
-plt.show()
-
-importances = rf_acc.feature_importances_
-top_features = pd.DataFrame({
-    'Feature': X_train_res.columns,
-    'Importance': importances
-}).sort_values(by='Importance', ascending=False).head(10)
-
+cm_res = confusion_matrix(y_test, y_pred_res)
 plt.figure(figsize=(6, 5))
-colors = plt.cm.Blues(np.linspace(0.5, 1, 10))
-plt.barh(top_features['Feature'][::-1], top_features['Importance'][::-1], color=colors)
-plt.xlabel('Importance')
-plt.title('Top Features (Resampled)')
-plt.tight_layout()
+sns.heatmap(cm_res, annot=True, fmt='d', cmap='Blues')
+plt.title("[採樣] Confusion Matrix")
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
 plt.show()
 
-#======================= Part 3: 1:1 切資料版本 ==========================
-# ✅ 模擬人工切分後平衡資料
-rf_f1 = RandomForestClassifier(n_estimators=200, max_depth=8, min_samples_split=2, min_samples_leaf=1, bootstrap=True, random_state=42)
-rf_acc = RandomForestClassifier(n_estimators=100, max_depth=8, min_samples_split=2, min_samples_leaf=1, bootstrap=True, random_state=42)
-rf_rec = RandomForestClassifier(n_estimators=300, max_depth=8, min_samples_split=2, min_samples_leaf=1, bootstrap=True, random_state=42)
-rf_auc = RandomForestClassifier(n_estimators=100, max_depth=8, min_samples_split=2, min_samples_leaf=1, bootstrap=True, random_state=42)
+#================= 2. 原始資料（未採樣） ===================
+best_auc_raw = 0
+best_params_raw = {}
 
-models_bal = [rf_f1, rf_acc, rf_rec, rf_auc]
+for n in param_grid['n_estimators']:
+    for d in param_grid['max_depth']:
+        for s in param_grid['min_samples_split']:
+            for l in param_grid['min_samples_leaf']:
+                model = RandomForestClassifier(n_estimators=n, max_depth=d, min_samples_split=s,
+                                               min_samples_leaf=l, bootstrap=True, random_state=42)
+                model.fit(X_train, y_train)
+                prob = model.predict_proba(X_val)[:, 1]
+                auc = roc_auc_score(y_val, prob)
+                if auc > best_auc_raw:
+                    best_auc_raw = auc
+                    best_params_raw = model.get_params()
 
-for i, model in enumerate(models_bal, 1):
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-    print(f"[1:1切資料] Model {i}:")
-    print(classification_report(y_test, y_pred))
-    auc_val = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
-    print("AUC:", auc_val)
+print("[未採樣] Best ROC AUC:", best_auc_raw)
+print("[未採樣] Best Params:", best_params_raw)
 
-# 特徵重要性（以 recall 模型為例）
-importances = rf_rec.feature_importances_
-top_features = pd.DataFrame({
-    'Feature': X_train.columns,
-    'Importance': importances
-}).sort_values(by='Importance', ascending=False).head(10)
+model_raw = RandomForestClassifier(**best_params_raw)
+model_raw.fit(X_train, y_train)
+y_pred_raw = model_raw.predict(X_test)
+y_prob_raw = model_raw.predict_proba(X_test)[:, 1]
 
-plt.figure(figsize=(6, 5))
-colors = plt.cm.Blues(np.linspace(0.5, 1, 10))
-plt.barh(top_features['Feature'][::-1], top_features['Importance'][::-1], color=colors)
-plt.xlabel('Importance')
-plt.title('Top Features (1:1 Split)')
-plt.tight_layout()
-plt.show()
+print("[未採樣] Accuracy:", accuracy_score(y_test, y_pred_raw))
+print("[未採樣] Precision:", precision_score(y_test, y_pred_raw))
+print("[未採樣] Recall:", recall_score(y_test, y_pred_raw))
+print("[未採樣] F1-score:", f1_score(y_test, y_pred_raw))
+print("[未採樣] ROC AUC:", roc_auc_score(y_test, y_prob_raw))
+
+#================= 3. 1:1 配平資料 ===================
+best_auc_bal = 0
+best_params_bal = {}
+
+for n in param_grid['n_estimators']:
+    for d in param_grid['max_depth']:
+        for s in param_grid['min_samples_split']:
+            for l in param_grid['min_samples_leaf']:
+                model = RandomForestClassifier(n_estimators=n, max_depth=d, min_samples_split=s,
+                                               min_samples_leaf=l, bootstrap=True, random_state=42)
+                model.fit(X_train_bal, y_train_bal)
+                prob = model.predict_proba(X_val)[:, 1]
+                auc = roc_auc_score(y_val, prob)
+                if auc > best_auc_bal:
+                    best_auc_bal = auc
+                    best_params_bal = model.get_params()
+
+print("[1:1] Best ROC AUC:", best_auc_bal)
+print("[1:1] Best Params:", best_params_bal)
+
+model_bal = RandomForestClassifier(**best_params_bal)
+model_bal.fit(X_train_bal, y_train_bal)
+y_pred_bal = model_bal.predict(X_test)
+y_prob_bal = model_bal.predict_proba(X_test)[:, 1]
+
+print("[1:1] Accuracy:", accuracy_score(y_test, y_pred_bal))
+print("[1:1] Precision:", precision_score(y_test, y_pred_bal))
+print("[1:1] Recall:", recall_score(y_test, y_pred_bal))
+print("[1:1] F1-score:", f1_score(y_test, y_pred_bal))
+print("[1:1] ROC AUC:", roc_auc_score(y_test, y_prob_bal))
+
+#===============================================
+# 總結：依據五個指標（Accuracy, Precision, Recall, F1-score, AUC）綜合比較三種資料處理方式的結果，
+# 決定最終採用哪一組模型進行訓練與部署。可搭配 DataFrame 或圖表視覺化整理輸出指標以利比較。
+
+# 提醒：請確認變數 X_train_bal, y_train_bal 為 1:1 配平後資料
