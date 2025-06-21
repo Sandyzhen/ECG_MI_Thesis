@@ -39,8 +39,11 @@ ECG_MI_Thesis/
 ├── features/                     # 特徵萃取（波形面積等）
 │   ├── wave_area_calculation.py
 │   └── extract_features.py
-├── models/                       # 機器學習模型訓練
-│   └── xgboost.py
+├── machine learning model/                       # 機器學習模型訓練
+│   ├── XGBoost.py
+│   ├── RandomForest.py
+│   ├── AdaBoost.py
+│ 
 ├── utils/                        # 輔助工具
 │   └── sliding_window.py
 ├── data/                         # 原始與處理後的資料
