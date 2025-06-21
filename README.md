@@ -16,11 +16,11 @@
 3. 評估機器學習模型於心肌梗塞診斷的應用潛力：評估有無資料擴
 增在不同機器學習模型預測心肌梗塞及其子類型的準確性。 
 ---
-## 研究架構圖（Research Framework）
+## 研究架構圖(Research Framework)
 
 ![研究架構圖](image/research_framework.png)
 
-## 研究流程圖（Research Framework）
+## 研究流程圖(Research Process)
 ![研究流程圖](image/research_process.png)
 
 ## 專案架構（Project Structure）
